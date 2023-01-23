@@ -9,7 +9,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Accord.Audio" Version="3.8.0" />
     <PackageReference Include="FftSharp" Version="1.1.5" />
+    <PackageReference Include="MathNet.Numerics" Version="5.0.0" />
     <PackageReference Include="NAudio" Version="2.0.1" />
     <PackageReference Include="ScottPlot" Version="4.1.45" />
     <PackageReference Include="ScottPlot.WinForms" Version="4.1.45" />

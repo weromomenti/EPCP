@@ -1,5 +1,13 @@
 ﻿using NAudio.CoreAudioApi;
 using NAudio.Wave;
+using Accord.Audio;
+using Accord.Math;
+using MathNet.Numerics.IntegralTransforms;
+using MathNet.Numerics;
+using Accord.Math.Kinematics;
+using System.Runtime.Intrinsics.X86;
+using MathNet.Numerics.Statistics;
+using FftSharp;
 
 namespace AudioMonitor;
 
@@ -10,6 +18,8 @@ public partial class FftMonitorForm : Form
     readonly WasapiCapture AudioDevice;
     readonly double[] FftValues;
 
+    Dictionary<double, string> NoteFreqs;
+
     public FftMonitorForm(WasapiCapture audioDevice)
     {
         InitializeComponent();
@@ -17,22 +27,38 @@ public partial class FftMonitorForm : Form
         WaveFormat fmt = audioDevice.WaveFormat;
 
         AudioValues = new double[fmt.SampleRate / 10];
-        double[] paddedAudio = FftSharp.Pad.ZeroPad(AudioValues);
-        double[] fftMag = FftSharp.Transform.FFTpower(paddedAudio);
+        double[] paddedAudio = Pad.ZeroPad(AudioValues);
+        double[] fftMag = Transform.FFTpower(paddedAudio);
         FftValues = new double[fftMag.Length];
-        double fftPeriod = FftSharp.Transform.FFTfreqPeriod(fmt.SampleRate, fftMag.Length);
+        double fftPeriod = Transform.FFTfreqPeriod(fmt.SampleRate, fftMag.Length);
+
+        NoteFreqs = new Dictionary<double, string>() {
+            { 32.703, "C" },
+            { 34.648, "C#" },
+            { 36.708, "D" },
+            { 38.891, "D#" },
+            { 41.203, "E" },
+            { 43.654, "F" },
+            { 46.249, "F#" },
+            { 48.999, "G" },
+            { 51.913, "G#" },
+            { 55, "A" },
+            { 58.270, "A#" },
+            { 61.735, "B" } };
 
         formsPlot1.Plot.AddSignal(FftValues, 1.0 / fftPeriod);
         formsPlot1.Plot.YLabel("Spectral Power");
         formsPlot1.Plot.XLabel("Frequency (kHz)");
         formsPlot1.Plot.Title($"{fmt.Encoding} ({fmt.BitsPerSample}-bit) {fmt.SampleRate} KHz");
-        formsPlot1.Plot.SetAxisLimits(0, 6000, 0, .005);
+        formsPlot1.Plot.SetAxisLimits(0, 6000, 0, .000000009); // .00000005 // .0000000005 // .000000009
         formsPlot1.Refresh();
 
         AudioDevice.DataAvailable += WaveIn_DataAvailable;
         AudioDevice.StartRecording();
 
         FormClosed += FftMonitorForm_FormClosed;
+
+        timer1.Interval = 20;
     }
 
     private void FftMonitorForm_FormClosed(object? sender, FormClosedEventArgs e)
@@ -76,22 +102,56 @@ public partial class FftMonitorForm : Form
 
     private void timer1_Tick(object sender, EventArgs e)
     {
-        double[] paddedAudio = FftSharp.Pad.ZeroPad(AudioValues);
-        double[] fftMag = FftSharp.Transform.FFTmagnitude(paddedAudio);
-        Array.Copy(fftMag, FftValues, fftMag.Length);
+        double[] paddedAudio = Pad.ZeroPad(AudioValues);
 
-        // find the frequency peak
-        int peakIndex = 0;
-        for (int i = 0; i < fftMag.Length; i++)
+        FftSharp.Windows.Hamming hamming = new FftSharp.Windows.Hamming();
+        hamming.ApplyInPlace(paddedAudio);
+
+        double[] fftMag = Transform.FFTmagnitude(paddedAudio);
+
+        double[] hps = new double[fftMag.Length];
+        Array.Copy(fftMag, hps, hps.Length);
+
+        for (int m = 1; m < 4; m++)
         {
-            if (fftMag[i] > fftMag[peakIndex])
-                peakIndex = i;
+            double[] newFunc = ReducePeriod(fftMag, (int)Math.Pow(2, m));
+
+            for (int i = 0; i < hps.Length; i++)
+            {
+                hps[i] *= newFunc[i];
+            }
         }
-        double fftPeriod = FftSharp.Transform.FFTfreqPeriod(AudioDevice.WaveFormat.SampleRate, fftMag.Length);
-        double peakFrequency = fftPeriod * peakIndex;
-        label1.Text = $"Peak Frequency: {peakFrequency:N0} Hz";
+
+        Array.Copy(hps, FftValues, hps.Length);
+
+        PriorityQueue<int, double> peakIndexes = new(new IntMaxCompare());
+
+        peakIndexes.EnqueueRange(hps.Select((x, y) => (y, x)));
+
+        double hpsPeriod = Transform.FFTfreqPeriod(AudioDevice.WaveFormat.SampleRate, hps.Length);
+        double peakFrequency = hpsPeriod * peakIndexes.Peek();
+
+        var peakFreqs = new List<double>();
+        for (int i = 0; i < 2; i++)
+        {
+            peakFreqs.Add(peakIndexes.Dequeue() * hpsPeriod);
+        }
+        var note = NoteFreqs.MinBy(x => Math.Abs(x.Key - peakFreqs.Average())).Value;
+
+        label1.Text = $"Peak Frequency: {peakFrequency:N0} Hz" /*$"Note: {note}"*/;
 
         // request a redraw using a non-blocking render queue
-        formsPlot1.RefreshRequest();
+
+        formsPlot1.Refresh();
+    }
+    public double[] ReducePeriod(double[] source, int period)
+    {
+        double[] result = new double[source.Length];
+
+        for (int i = 0; i < source.Length; i++)
+        {
+            result[i] = source[(i * period) % source.Length];
+        }
+        return result;
     }
 }

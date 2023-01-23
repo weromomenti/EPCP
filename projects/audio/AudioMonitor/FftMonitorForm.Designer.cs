@@ -51,20 +51,20 @@
             this.formsPlot1.Location = new System.Drawing.Point(12, 41);
             this.formsPlot1.Margin = new System.Windows.Forms.Padding(4, 3, 4, 3);
             this.formsPlot1.Name = "formsPlot1";
-            this.formsPlot1.Size = new System.Drawing.Size(555, 273);
+            this.formsPlot1.Size = new System.Drawing.Size(1082, 646);
             this.formsPlot1.TabIndex = 7;
             // 
             // timer1
             // 
             this.timer1.Enabled = true;
-            this.timer1.Interval = 20;
+            this.timer1.Interval = 2000;
             this.timer1.Tick += new System.EventHandler(this.timer1_Tick);
             // 
             // FftMonitorForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(580, 326);
+            this.ClientSize = new System.Drawing.Size(1107, 699);
             this.Controls.Add(this.formsPlot1);
             this.Controls.Add(this.label1);
             this.Name = "FftMonitorForm";
