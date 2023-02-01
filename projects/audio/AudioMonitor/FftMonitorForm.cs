@@ -59,7 +59,7 @@ public partial class FftMonitorForm : Form
         formsPlot1.Plot.YLabel("Spectral Power");
         formsPlot1.Plot.XLabel("Frequency (kHz)");
         formsPlot1.Plot.Title($"{fmt.Encoding} ({fmt.BitsPerSample}-bit) {fmt.SampleRate} KHz");
-        formsPlot1.Plot.SetAxisLimits(0, 6000, 0, .00000000005); // .00000005 // .0000000005 // .000000009
+        formsPlot1.Plot.SetAxisLimits(0, 6000, 0, .00000005); // .00000005 // .0000000005 // .000000009
         formsPlot1.Refresh();
 
         AudioDevice.DataAvailable += WaveIn_DataAvailable;
@@ -111,7 +111,7 @@ public partial class FftMonitorForm : Form
 
     private void timer1_Tick(object sender, EventArgs e)
     {
-        double[] paddedAudio = Pad.ZeroPad(AudioValues);
+        double[] paddedAudio = Pad.ZeroPad(AudioValues); // there should be audio values
 
         FftSharp.Windows.Hamming hamming = new();
         hamming.ApplyInPlace(paddedAudio);
