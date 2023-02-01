@@ -19,6 +19,7 @@ public partial class FftMonitorForm : Form
     readonly double[] FftValues;
 
     Dictionary<double, string> NoteFreqs;
+    Dictionary<double, double> noteFreqs = new();
 
     public FftMonitorForm(WasapiCapture audioDevice)
     {
@@ -46,6 +47,14 @@ public partial class FftMonitorForm : Form
             { 58.270, "A#" },
             { 61.735, "B" } };
 
+        double freq = 6.875;
+
+        while (freq < 5250)
+        {
+            noteFreqs.Add(freq * Math.Pow(2, 1.0 / 12.0), 0);
+            freq *= Math.Pow(2, 1.0 / 12.0);
+        }
+
         formsPlot1.Plot.AddSignal(FftValues, 1.0 / fftPeriod);
         formsPlot1.Plot.YLabel("Spectral Power");
         formsPlot1.Plot.XLabel("Frequency (kHz)");
@@ -58,7 +67,7 @@ public partial class FftMonitorForm : Form
 
         FormClosed += FftMonitorForm_FormClosed;
 
-        timer1.Interval = 10;
+        timer1.Interval = 1000;
     }
 
     private void FftMonitorForm_FormClosed(object? sender, FormClosedEventArgs e)
@@ -112,9 +121,10 @@ public partial class FftMonitorForm : Form
         double[] hps = new double[fftMag.Length];
         Array.Copy(fftMag, hps, hps.Length);
 
+        double[] newFunc;
         for (int m = 1; m < 4; m++)
         {
-            double[] newFunc = ReducePeriod(fftMag, (int)Math.Pow(2, m));
+            newFunc = ReducePeriod(fftMag, (int)Math.Pow(2, m));
 
             for (int i = 0; i < newFunc.Length; i++)
             {
@@ -124,25 +134,36 @@ public partial class FftMonitorForm : Form
 
         Array.Copy(hps, FftValues, hps.Length);
 
-        PriorityQueue<int, double> peakIndexes = new(new IntMaxCompare());
-
-        peakIndexes.EnqueueRange(hps.Select((x, y) => (y, x)));
-
         double hpsPeriod = Transform.FFTfreqPeriod(AudioDevice.WaveFormat.SampleRate, hps.Length);
-        double peakFrequency = hpsPeriod * peakIndexes.Peek();
+        double peakFrequency;
 
-        //var peakFreqs = new List<double>();
-        //for (int i = 0; i < 2; i++)
-        //{
-        //    peakFreqs.Add(peakIndexes.Dequeue() * hpsPeriod);
-        //}
-        //var note = NoteFreqs.MinBy(x => Math.Abs(x.Key - peakFreqs.Average())).Value;
+        double close, mag, freq;
 
-        label1.Text = $"Peak Frequency: {peakFrequency:N0} Hz" /*$"Note: {note}"*/;
+        for (int i = 0; i < hps.Length; i++)
+        {
+            freq = i * hpsPeriod;
+            mag = hps[i];
+            close = noteFreqs.OrderBy(x => Math.Abs(x.Key - freq)).First().Key;
+            noteFreqs[close] += mag;
+        }
+        double maxFreq = noteFreqs.Max(x => x.Value);
 
-        // request a redraw using a non-blocking render queue
+        double[] noteIntensity = new double[12];
 
-        formsPlot1.Refresh();
+        for (int i = 0; i < 12; i++)
+        {
+            noteIntensity[i] = noteFreqs.Where((item, index) => index % (i + 1) == 0).Sum(x => x.Value);
+        }
+
+        peakFrequency = noteFreqs.OrderByDescending(x => x.Value).First().Key;
+
+        label1.Text = $"Peak Frequency: {peakFrequency:N0} Hz";
+
+        noteFreqs = noteFreqs.ToDictionary(x => x.Key, x => 0.0);
+
+        // request a redraw using a non-blocking, non-binary, queer render queue
+
+        formsPlot1.RefreshRequest();
     }
     public static double[] ReducePeriod(double[] source, int period)
     {
